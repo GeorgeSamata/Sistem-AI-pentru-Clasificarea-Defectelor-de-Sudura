@@ -1,0 +1,25 @@
+item {
+    name: "bad weld",
+    id: 1,
+    display_name: "bad weld"
+}
+item {
+    name: "crack",
+    id: 2,
+    display_name: "crack"
+}
+item {
+    name: "good weld",
+    id: 3,
+    display_name: "good weld"
+}
+item {
+    name: "porosity",
+    id: 4,
+    display_name: "porosity"
+}
+item {
+    name: "spatter",
+    id: 5,
+    display_name: "spatter"
+}
