@@ -1,74 +1,109 @@
-import streamlit as st
+import customtkinter as ctk
+from tkinter import filedialog
+from PIL import Image, ImageTk
 import tensorflow as tf
-import cv2
 import numpy as np
-import sys
 import os
+import sys
 
-# Setam calea pentru importuri
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_DIR))
+MODEL_PATH = os.path.join(PROJECT_ROOT, 'models', 'optimized_model.keras')
 
-# Configurare UI
-st.set_page_config(page_title="SIA Sudura - TensorFlow", layout="wide")
-st.title("🏭 SIA - Clasificare Defecte Sudura (TensorFlow)")
+CLASS_NAMES = ['bad_weld', 'crack', 'good_weld', 'porosity', 'spatter']
 
-# Incarcare Model
-MODEL_PATH = 'models/welding_model_v1.keras'
-CLASSES = ["Defect (Bad Weld)", "OK (Good Weld)"]
+EXPLICATII = {
+    'bad_weld':  'SUDURĂ NECONFORMĂ - Defect de Sudură',
+    'crack':     'DEFECT STRUCTURAL - Fisură',
+    'good_weld': 'SUDURĂ CONFORMĂ - Sudură de Calitate',
+    'porosity':  'DEFECT DE VOLUM - Porozitate',
+    'spatter':   'IMPERFECȚIUNI DE SUPRAFAȚĂ - Stropi de Sudură'
+}
 
-@st.cache_resource
-def load_tf_model():
-    if not os.path.exists(MODEL_PATH):
-        st.warning("Modelul nu a fost gasit. Se foloseste un model neantrenat temporar.")
-        # Daca nu exista, il cream pe loc (doar structura)
-        from src.neural_network.cnn_model import WeldingCNN
-        net = WeldingCNN()
-        net.save_model(MODEL_PATH)
-        return tf.keras.models.load_model(MODEL_PATH)
-    return tf.keras.models.load_model(MODEL_PATH)
+class WeldingApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-try:
-    model = load_tf_model()
-    st.sidebar.success("Model TensorFlow incarcat!")
-except Exception as e:
-    st.sidebar.error(f"Eroare incarcare model: {e}")
-
-# Upload
-uploaded_file = st.file_uploader("Incarca Imagine Sudura", type=['jpg', 'png', 'jpeg'])
-
-col1, col2 = st.columns(2)
-
-if uploaded_file is not None:
-    # Procesare imagine
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    with col1:
-        st.image(image_rgb, caption="Imagine Originala", use_container_width=True)
+        self.title("Sistem AI - Detectie Defecte (Optimizat)")
+        self.geometry("800x600")
+        ctk.set_appearance_mode("Dark")
         
-    if st.button("Analizeaza"):
-        with st.spinner("Procesare TensorFlow..."):
-            # Preprocesare specifica TF (Resize 224x224)
-            img_resized = cv2.resize(image_rgb, (224, 224))
-            img_array = tf.expand_dims(img_resized, 0) # Batch dimension
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        self.lbl_title = ctk.CTkLabel(self, text="Analiza Automata Suduri - Model Final", font=("Arial", 24, "bold"))
+        self.lbl_title.grid(row=0, column=0, pady=20)
+
+        self.lbl_image = ctk.CTkLabel(self, text="Incarca o imagine...", text_color="gray")
+        self.lbl_image.grid(row=1, column=0, padx=20, pady=20)
+        self.current_image_path = None
+
+        self.frame_controls = ctk.CTkFrame(self)
+        self.frame_controls.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
+
+        self.btn_load = ctk.CTkButton(self.frame_controls, text="📂 Incarca Imagine", command=self.browse_image)
+        self.btn_load.pack(side="left", padx=20, pady=20)
+
+        self.btn_predict = ctk.CTkButton(self.frame_controls, text="🔍 Analizeaza", command=self.predict, state="disabled")
+        self.btn_predict.pack(side="left", padx=20, pady=20)
+
+        self.lbl_result = ctk.CTkLabel(self.frame_controls, text="Asteptare...", font=("Arial", 18))
+        self.lbl_result.pack(side="right", padx=20)
+
+        self.model = None
+        self.load_model()
+
+    def load_model(self):
+        try:
+            print(f"Incarc modelul din: {MODEL_PATH}")
+            if not os.path.exists(MODEL_PATH):
+                raise FileNotFoundError("Fisierul modelului nu exista!")
+                
+            self.model = tf.keras.models.load_model(MODEL_PATH)
+            print("Model incarcat cu succes!")
+        except Exception as e:
+            self.lbl_title.configure(text=f"Eroare: {str(e)[:50]}...", text_color="red")
+            print(f"Eroare Critica: {e}")
+
+    def browse_image(self):
+        filename = filedialog.askopenfilename(filetypes=[("Images", "*.jpg;*.jpeg;*.png")])
+        if filename:
+            self.current_image_path = filename
+            img = Image.open(filename)
+            img = img.resize((400, 300))
+            photo = ctk.CTkImage(light_image=img, dark_image=img, size=(400, 300))
+            self.lbl_image.configure(image=photo, text="")
+            self.btn_predict.configure(state="normal")
+            self.lbl_result.configure(text="Pregatit", text_color="white")
+
+    def predict(self):
+        if not self.model:
+            self.lbl_result.configure(text="Eroare: Model lipsa!", text_color="red")
+            return
             
-            # Inferenta
-            predictions = model.predict(img_array)
-            score = tf.nn.softmax(predictions[0])
-            class_id = np.argmax(predictions[0])
-            confidence = np.max(predictions[0]) # Simplificat pt demo
+        try:
+            img = tf.keras.utils.load_img(self.current_image_path, target_size=(224, 224))
+            img_array = tf.keras.utils.img_to_array(img) / 255.0
+            img_batch = np.expand_dims(img_array, axis=0)
+
+            predictions = self.model.predict(img_batch)
+            score = predictions[0]
+            class_index = np.argmax(score)
             
-            # Afisare
-            label = CLASSES[class_id] if class_id < len(CLASSES) else "Necunoscut"
+            raw_name = CLASS_NAMES[class_index]
+            display_name = EXPLICATII[raw_name] 
             
-            with col2:
-                st.subheader("Rezultat Analiza:")
-                if "Defect" in label:
-                    st.error(f"REZULTAT: {label}")
-                else:
-                    st.success(f"REZULTAT: {label}")
-                    
-                st.progress(float(confidence))
-                st.write(f"Incredere Model: {confidence*100:.2f}%")
-                st.code(f"Raw Output Tensor: {predictions}")
+            confidence = 100 * np.max(score)
+
+            color = "#00FF00" if raw_name == "good_weld" else "#FF5555"
+            
+            result_text = f"{display_name}\nIncredere: {confidence:.2f}%"
+            self.lbl_result.configure(text=result_text, text_color=color)
+
+        except Exception as e:
+            self.lbl_result.configure(text="Eroare Analiza", text_color="red")
+            print(e)
+
+if __name__ == "__main__":
+    app = WeldingApp()
+    app.mainloop()

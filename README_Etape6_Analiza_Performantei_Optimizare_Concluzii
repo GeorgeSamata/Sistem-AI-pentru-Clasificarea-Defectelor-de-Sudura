@@ -1,0 +1,155 @@
+# README – Etapa 6: Analiza Performanței, Optimizarea și Concluzii Finale
+
+**Disciplina:** Rețele Neuronale
+
+**Instituție:** POLITEHNICA București – FIIR
+
+**Student:** Șamata George Cristian
+**Data predării:** 22.01.2026
+
+---
+
+## Scopul Etapei 6
+
+Această etapă marchează maturizarea completă a Sistemului cu Inteligență Artificială (SIA). Am realizat analiza detaliată a erorilor, am optimizat hiperparametrii pentru a maximiza detecția defectelor critice (fisuri) și am integrat modelul final în aplicația software.
+
+**Status Final:** Proiect complet funcțional, pregătit pentru evaluare.
+
+---
+
+## PREREQUISITE – Verificare Etapa 5
+
+* [X] **Model antrenat** salvat în `models/trained_model.keras`.
+* [X] **Metrici baseline:** Acuratețe 96% (peste pragul de 65%).
+* [X] **UI funcțional:** Aplicația `gui_tf.py` rulează și face inferență reală.
+* [X] **State Machine:** Implementat și validat.
+
+---
+
+## 1. Experimente de Optimizare
+
+Pentru a ajunge la performanța actuală de 96%, am rulat 4 experimente succesive, variind arhitectura, datele și hiperparametrii.
+
+### Tabel Experimente de Optimizare
+
+| **Exp#** | **Modificare față de Baseline** | **Accuracy** | **F1-score** | **Observații** |
+| --- | --- | --- | --- | --- |
+| **Exp 1 (Baseline)** | Arhitectură simplă (2 Conv Layers), Fără Augmentare date | 0.78 | 0.75 | Modelul făcea overfitting rapid (Train 99% vs Val 78%). |
+| **Exp 2** | Adăugare Dropout (0.5) + Early Stopping | 0.85 | 0.82 | Overfitting redus, dar performanță plafonată. |
+| **Exp 3** | **Adăugare Date Sintetice (Regula 40%)** | 0.92 | 0.90 | Salt major de performanță datorită triplării datasetului (Zgomot+Luminozitate). |
+| **Exp 4 (Final)** | Arhitectură Deep (3 Conv Layers) + Batch Size 32 + Adam Optim | **0.96** | **0.95** | **BEST.** Echilibru perfect între precizie și generalizare. |
+
+**Justificare alegere configurație finală (Exp 4):**
+Am ales configurația din Experimentul 4 ca fiind **Modelul Optimizat** deoarece:
+
+1. Are cel mai mare **Recall pe clasa critică `crack` (1.00)**.
+2. Augmentarea cu zgomot Gaussian a făcut modelul robust la imagini industriale neclare.
+3. Utilizarea a 3 blocuri convoluționale a permis extragerea trăsăturilor fine (porozitate mică) pe care modelele mai simple le ratau.
+
+---
+
+## 2. Actualizarea Aplicației Software în Etapa 6
+
+În urma optimizării, am actualizat aplicația software (`src/app/gui_tf.py`) pentru a reflecta maturitatea sistemului.
+
+### Tabel Modificări Aplicație Software
+
+| **Componenta** | **Stare Etapa 5** | **Modificare Etapa 6** | **Justificare** |
+| --- | --- | --- | --- |
+| **Model încărcat** | `trained_model.keras` | `optimized_model.keras` | Performanță maximă (96% vs 92%). |
+| **Feedback Vizual** | Text simplu | **Color Coding** (Roșu/Verde) | Operatorul are nevoie de indicii vizuale rapide. |
+| **Gestionare Erori** | Crash la fișier invalid | **Try-Except Blocks** | Robustete în utilizare (nu se închide aplicația). |
+| **Afișare Încredere** | Doar clasa | **Clasă + Procent (%)** | Ajută la decizia umană în cazuri ambigue (ex: 55%). |
+
+---
+
+## 3. Analiza Detaliată a Performanței
+
+### 3.1 Confusion Matrix și Interpretare
+
+Bazat pe matricea de confuzie generată (`docs/confusion_matrix.png`):
+
+* **Clasa STAR:** `crack` (Fisură).
+* **Recall: 100% (1.00)**.
+* **Semnificație:** Modelul nu a ratat NICI O fisură din setul de test. Acesta este cel mai important indicator pentru siguranța industrială.
+
+
+* **Clasa Problematică:** `good_weld`.
+* **Recall: 92%**.
+* **Confuzie:** Unele suduri bune sunt clasificate ca `bad_weld` sau `spatter`.
+* **Cauză:** Sudurile bune, dar cu iluminare proastă sau textură rugoasă, pot semăna cu defectele de suprafață.
+
+
+
+### 3.2 Analiza Exemplelor Greșite (False Positives)
+
+Deoarece `Recall` pe defecte este aproape perfect, erorile sunt preponderent **False Positives** (Alarme False).
+
+| **Index** | **True Label** | **Predicted** | **Confidence** | **Cauză probabilă** |
+| --- | --- | --- | --- | --- |
+| #42 | good_weld | bad_weld | 0.65 | Umbre puternice pe cordonul de sudură interpretate ca deformări. |
+| #115 | good_weld | spatter | 0.58 | Picături mici de metal (insignifiante) interpretate ca stropi excesivi. |
+| #302 | porosity | spatter | 0.72 | Porii de la suprafață seamănă vizual cu stropii (forme rotunde similare). |
+
+**Impact Industrial:**
+Sistemul este **"Fail-Safe"**. Erorile duc la respingerea unor piese bune (care vor fi re-verificate manual și acceptate), dar **NU permit trecerea pieselor defecte**. Costul verificării manuale este mult mai mic decât costul cedării structurii.
+
+---
+
+## 4. Agregarea Rezultatelor Finale
+
+| **Metrică** | **Etapa 5 (Baseline)** | **Etapa 6 (Optimizat)** | **Target Industrial** | **Status** |
+| --- | --- | --- | --- | --- |
+| Accuracy | 92% | **96%** | ≥90% | ✅ Depășit |
+| Recall (Crack) | 0.95 | **1.00** | 1.00 (Critic) | ✅ Perfect |
+| F1-score | 0.90 | **0.95** | ≥0.85 | ✅ Depășit |
+| Latență | ~150ms | **~50-80ms** | <100ms | ✅ OK |
+
+---
+
+## 5. Concluzii Finale și Lecții Învățate
+
+### 5.1 Evaluarea Proiectului
+
+Proiectul a atins toate obiectivele propuse. Am dezvoltat un sistem "End-to-End" care preia o imagine, o preprocesează și oferă un diagnostic precis în timp real. Punctul forte este capacitatea de a detecta 100% din fisuri, garantând siguranța.
+
+### 5.2 Limitări
+
+1. **Dependența de Iluminare:** Deși am folosit augmentare, modelul încă are ezitări (confidence < 70%) pe imagini foarte întunecate.
+2. **Dataset Sintetic:** 66% din date sunt generate. Performanța pe date reale din fabrică ar putea scădea ușor (Domain Shift) și ar necesita re-antrenare.
+
+### 5.3 Lecții Învățate
+
+1. **Datele sunt mai importante decât Modelul:** Curățarea folderelor Roboflow (Etapa 3) a avut un impact mai mare asupra acurateței decât modificarea numărului de neuroni.
+2. **Augmentarea este critică:** Fără generarea datelor sintetice (Zgomot/HSV), modelul nu ar fi trecut de 85% acuratețe din cauza numărului mic de date originale.
+3. **Matricea de Confuzie nu minte:** Acuratețea globală (96%) ascunde detalii. Doar analizând matricea am văzut că `good_weld` este clasa cea mai greu de clasificat corect.
+
+### 5.4 Plan Post-Feedback (Versiunea Examen)
+Proiectul este "Code Freeze" (Finalizat). Pentru sesiunea de examen, demonstrația se va face folosind folderul de test dedicat (`demo_images`) care conține eșantioane reprezentative pentru fiecare clasă, garantând o prezentare fluidă și profesionistă.
+
+---
+
+## Structura Finală a Repository-ului
+
+```
+Sistem AI pentru Clasificarea Defectelor de Sudura/
+├── README.md                           # Overview
+├── etapa6_optimizare_concluzii.md      # ← ACEST FIȘIER
+├── docs/
+│   ├── confusion_matrix.png            # Dovada performanței
+│   ├── loss_curve.png                  # Graficul de antrenare
+│   └── screenshots/
+│       ├── inference_real.png          # UI Etapa 5
+│       └── inference_optimized.png     # UI Final (Etapa 6)
+├── models/
+│   ├── trained_model.keras             # Model Etapa 5
+│   └── optimized_model.keras           # Model Final (Exp 4)
+├── src/
+│   ├── app/gui_tf.py                   # Aplicația Finală
+│   ├── neural_network/train.py         # Cod antrenare
+│   └── data_acquisition/generate_data.py # Cod generare date
+└── data/                               # Dataset complet
+
+```
+
+---

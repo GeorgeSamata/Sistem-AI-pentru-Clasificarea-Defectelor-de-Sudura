@@ -1,152 +1,111 @@
 import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
 import matplotlib.pyplot as plt
 import os
 import sys
 
-# Adăugăm calea către root pentru a putea importa modelul
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from src.neural_network.cnn_model import WeldingCNN
+CURRENT_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR)) 
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'train')
 
-# --- Configurare ---
+sys.path.append(os.path.join(PROJECT_ROOT, 'src'))
+
+try:
+    from neural_network.cnn_model import WeldingCNN
+except ImportError:
+    try:
+        from cnn_model import WeldingCNN
+    except ImportError:
+        print("[CRITIC] Nu pot importa cnn_model. Verifica structura!")
+        sys.exit(1)
+
 BATCH_SIZE = 32
 IMG_SIZE = (224, 224)
-EPOCHS = 50 
+EPOCHS = 30
 LEARNING_RATE = 0.001
 
-# Căi
-DATA_DIR = "data"
-MODELS_DIR = "models"
-RESULTS_DIR = "results"
-DOCS_DIR = "docs"
-
-# Asigurăm existența directoarelor de output
-os.makedirs(MODELS_DIR, exist_ok=True)
-os.makedirs(RESULTS_DIR, exist_ok=True)
-os.makedirs(DOCS_DIR, exist_ok=True)
-
-def plot_training_history(history):
-    """Generează și salvează graficele de Loss și Accuracy."""
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
-    epochs_range = range(len(acc))
-
-    plt.figure(figsize=(14, 6))
-    
-    # Grafic Loss
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs_range, loss, label='Training Loss', marker='o')
-    plt.plot(epochs_range, val_loss, label='Validation Loss', marker='o')
-    plt.legend(loc='upper right')
-    plt.title('Curba de Învățare - Loss')
-    plt.xlabel('Epoci')
-    plt.ylabel('Loss')
-    plt.grid(True)
-
-    # Grafic Accuracy
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs_range, acc, label='Training Accuracy', marker='o')
-    plt.plot(epochs_range, val_acc, label='Validation Accuracy', marker='o')
-    plt.legend(loc='lower right')
-    plt.title('Curba de Învățare - Acuratețe')
-    plt.xlabel('Epoci')
-    plt.ylabel('Acuratețe')
-    plt.grid(True)
-    
-    plot_path = os.path.join(DOCS_DIR, "loss_curve.png")
-    plt.savefig(plot_path)
-    plt.close()
-    print(f"[INFO] Grafic salvat în {plot_path}")
-
 def train():
-    # 1. Pregătirea Generatorilor de Date (Rescaling 0-1)
-    train_datagen = ImageDataGenerator(rescale=1./255)
-    val_datagen = ImageDataGenerator(rescale=1./255)
+    print(f"=== START ANTRENARE ===")
+    print(f"[DEBUG] Caut datele in folderul: {DATA_DIR}")
 
-    print("[INFO] Încărcare date de antrenare și validare...")
+    if not os.path.exists(DATA_DIR):
+        print(f"[EROARE FATALA] Folderul nu exista pe disc!")
+        print(f"Te rog verifica daca ai folderul 'train' in 'data' folosind File Explorer.")
+        return
+
+    if not os.listdir(DATA_DIR):
+        print(f"[EROARE] Folderul {DATA_DIR} este GOL!")
+        return
+
+    print(f"[INFO] Folder gasit. Incep incarcarea imaginilor...")
     
-    # Train Generator
-    train_generator = train_datagen.flow_from_directory(
-        os.path.join(DATA_DIR, 'train'),
-        target_size=IMG_SIZE,
-        batch_size=BATCH_SIZE,
-        class_mode='sparse', # 0 sau 1
-        shuffle=True,
-        seed=42
-    )
+    try:
+        train_ds = tf.keras.utils.image_dataset_from_directory(
+            DATA_DIR,
+            validation_split=0.2,
+            subset="training",
+            seed=123,
+            image_size=IMG_SIZE,
+            batch_size=BATCH_SIZE,
+            label_mode='categorical'
+        )
 
-    # Validation Generator
-    validation_generator = val_datagen.flow_from_directory(
-        os.path.join(DATA_DIR, 'validation'),
-        target_size=IMG_SIZE,
-        batch_size=BATCH_SIZE,
-        class_mode='sparse',
-        shuffle=False,
-        seed=42
-    )
+        val_ds = tf.keras.utils.image_dataset_from_directory(
+            DATA_DIR,
+            validation_split=0.2,
+            subset="validation",
+            seed=123,
+            image_size=IMG_SIZE,
+            batch_size=BATCH_SIZE,
+            label_mode='categorical'
+        )
+    except ValueError as e:
+        print(f"[EROARE DATASET] {e}")
+        print("Verifica daca in 'data/train' ai folderele claselor (bad_weld, crack, etc).")
+        return
 
-    # 2. Inițializare Model
-    print("[INFO] Inițializare model CNN...")
-    cnn_wrapper = WeldingCNN(input_shape=IMG_SIZE + (3,), num_classes=2)
-    model = cnn_wrapper.model
+    class_names = train_ds.class_names
+    num_classes = len(class_names)
+    print(f"[INFO] Clase detectate ({num_classes}): {class_names}")
+
+    AUTOTUNE = tf.data.AUTOTUNE
+    train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
+    val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+
+    print(f"[INFO] Initializare model CNN...")
+    cnn = WeldingCNN(input_shape=IMG_SIZE + (3,), num_classes=num_classes)
+    model = cnn.model
     
-    # Compilare cu Learning Rate specific
-    optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
-    model.compile(optimizer=optimizer,
-                  loss='sparse_categorical_crossentropy',
-                  metrics=['accuracy'])
-    
-    model.summary()
+    normalization_layer = tf.keras.layers.Rescaling(1./255)
+    train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y))
+    val_ds = val_ds.map(lambda x, y: (normalization_layer(x), y))
 
-    # 3. Callbacks (Nivel 2)
+    models_dir = os.path.join(PROJECT_ROOT, 'models')
+    results_dir = os.path.join(PROJECT_ROOT, 'results')
+    docs_dir = os.path.join(PROJECT_ROOT, 'docs')
+    
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(docs_dir, exist_ok=True)
+
     callbacks = [
-        # Salvează modelul doar când val_loss e minim
-        ModelCheckpoint(
-            filepath=os.path.join(MODELS_DIR, 'trained_model.keras'),
-            save_best_only=True,
-            monitor='val_loss',
-            mode='min',
-            verbose=1
-        ),
-        # Oprește antrenarea dacă nu mai învață
-        EarlyStopping(
-            monitor='val_loss',
-            patience=7,
-            restore_best_weights=True,
-            verbose=1
-        ),
-        # Reduce viteza de învățare la platou
-        ReduceLROnPlateau(
-            monitor='val_loss',
-            factor=0.5,
-            patience=3,
-            min_lr=1e-6,
-            verbose=1
-        ),
-        # Log istoric în CSV
-        CSVLogger(os.path.join(RESULTS_DIR, 'training_history.csv'))
+        ModelCheckpoint(os.path.join(models_dir, 'trained_model.keras'), save_best_only=True, monitor='val_loss'),
+        EarlyStopping(patience=5, restore_best_weights=True),
+        CSVLogger(os.path.join(results_dir, 'training_history.csv'))
     ]
 
-    # 4. Start Antrenare
-    print(f"[INFO] Pornire antrenare (Max {EPOCHS} epoci)...")
-    history = model.fit(
-        train_generator,
-        epochs=EPOCHS,
-        validation_data=validation_generator,
-        callbacks=callbacks,
-        verbose=1
-    )
+    print("[INFO] Start antrenare (poate dura cateva minute)...")
+    history = model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS, callbacks=callbacks)
 
-    # 5. Salvare Grafice
-    plot_training_history(history)
-    print("[SUCCESS] Antrenare completă. Model salvat în 'models/trained_model.keras'.")
+    plt.figure(figsize=(10, 4))
+    plt.plot(history.history['accuracy'], label='Train Acc')
+    plt.plot(history.history['val_accuracy'], label='Val Acc')
+    plt.title('Evolutie Antrenare')
+    plt.xlabel('Epoci')
+    plt.ylabel('Acuratete')
+    plt.legend()
+    plt.savefig(os.path.join(docs_dir, 'loss_curve.png'))
+    print(f"[SUCCES] Antrenare completa! Graficul salvat in docs/loss_curve.png")
 
 if __name__ == "__main__":
-    # Verificare de siguranță
-    if os.path.exists(os.path.join(DATA_DIR, 'train')):
-        train()
-    else:
-        print("[EROARE] Nu ai date pregătite. Rulează întâi 'src/preprocessing/prepare_final_dataset.py'!")
+    train()

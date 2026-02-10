@@ -1,0 +1,11 @@
+              precision    recall  f1-score   support
+
+    bad_weld       0.94      0.89      0.92       171
+       crack       1.00      1.00      1.00         4
+   good_weld       0.83      0.92      0.87        26
+    porosity       0.97      0.97      0.97       136
+     spatter       0.98      0.99      0.98       486
+
+    accuracy                           0.96       823
+   macro avg       0.94      0.96      0.95       823
+weighted avg       0.96      0.96      0.96       823

@@ -1,112 +1,142 @@
-# Sistem AI pentru Clasificarea Defectelor de Sudură
+# 📘 README – Etapa 3: Analiza și Pregătirea Setului de Date pentru Rețele Neuronale
 
 **Disciplina:** Rețele Neuronale
+
 **Instituție:** POLITEHNICA București – FIIR
-**Student:** Șamata George Cristian
-**Data:** 03.12.2025
+
+**Student:** [Nume Prenume]
+
+**Data:** 22.01.2026
 
 ---
 
-## 1. Descrierea Problemei
+## Introducere
 
-Proiectul vizează dezvoltarea unui sistem avansat de vizualizare computerizată (Computer Vision) pentru controlul nedistructiv al calității (NDT). Obiectivul este detectarea automată și localizarea defectelor în cordoanele de sudură industriale folosind arhitectura **YOLOv8**.
+Acest document descrie activitățile realizate în **Etapa 3**, în care s-a analizat, curățat și augmentat setul de date pentru clasificarea defectelor de sudură. Scopul a fost transformarea datelor brute (dezorganizate) într-un set structurat, echilibrat și suficient de mare (4000+ imagini) pentru a antrena o rețea convoluțională (CNN).
+
+---
+
+## 1. Structura Repository-ului Github (versiunea Etapei 3)
+
+```
+Sistem AI pentru Clasificarea Defectelor de Sudura/
+├── README_Etapa3.md       # Acest fișier
+├── data/
+│   ├── raw/               # Datele brute organizate (cele 5 clase curate)
+│   ├── train/             # Setul FINAL (Originale + Generate) folosit la antrenare
+│   └── generated/         # Copie a datelor sintetice (pentru evidențierea contribuției)
+├── src/
+│   ├── data_acquisition/  
+│   │   ├── fix_dataset.py    # Script curățare foldere Roboflow
+│   │   └── generate_data.py  # Script augmentare (zgomot + luminozitate)
+│   └── neural_network/    
+│       └── train.py          # Scriptul care încarcă datele
+├── docs/
+│   └── confusion_matrix.png
+└── requirements.txt
+
+```
+
+---
 
 ## 2. Descrierea Setului de Date
 
 ### 2.1 Sursa datelor
 
-* **Origine:** Dataset public adaptat din "Welding Defect Object Detection" (Kaggle), conținând imagini radiografice și macro ale sudurilor.
-* **Modul de achiziție:** [ ] Senzori reali / [ ] Simulare / [X] Fișier extern (Kaggle) / [X] Generare programatică (Augmentare date)
-* **Perioada / condițiile colectării:** Noiembrie 2024 - Ianuarie 2025 (Selectarea și etichetarea manuală a datelor relevante pentru sudură).
+* **Origine:** Dataset public Roboflow ("Welding Defect") combinat cu date sintetice.
+* **Modul de achiziție:** * [X] Fișier extern (Roboflow) - baza de imagini reale.
+* [X] Generare programatică - augmentare avansată pentru triplarea dataset-ului.
+
+
+* **Perioada / condițiile colectării:** Ianuarie 2026.
 
 ### 2.2 Caracteristicile dataset-ului
 
-* **Număr total de observații:** 2,500 imagini (estimat după augmentare)
-* **Număr de caracteristici (features):** 3 (Înălțime x Lățime x Canale RGB)
-* **Tipuri de date:** [X] Numerice (Coordonate bbox) / [ ] Categoriale / [ ] Temporale / [X] Imagini
-* **Format fișiere:** [ ] CSV / [X] TXT (Adnotări YOLO) / [ ] JSON / [X] PNG/JPG / [ ] Altele: [...]
+* **Număr total de observații:** **4116 imagini** (1372 originale + 2744 generate).
+* **Număr de caracteristici (features):** 3 (Înălțime 224 x Lățime 224 x 3 Canale RGB).
+* **Tipuri de date:** [X] Imagini (`.jpg`, `.png`).
+* **Clase (Target):** 5 clase de defecte.
 
-### 2.3 Descrierea fiecărei caracteristici
+### 2.3 Descrierea caracteristicilor (Input/Output)
 
 | **Caracteristică** | **Tip** | **Unitate** | **Descriere** | **Domeniu valori** |
-|-------------------|---------|-------------|---------------|--------------------|
-| **INPUT 1:** Matrice Pixeli | Numeric (Tensor) | Intensitate (0-255) | Informația vizuală brută a imaginii pe 3 canale (RGB). | [0, 255] |
-| **INPUT 2:** Lățime Imagine | Numeric | Pixeli (px) | Rezoluția orizontală la care este redimensionată imaginea pentru rețea. | Fix: 640 |
-| **INPUT 3:** Înălțime Imagine | Numeric | Pixeli (px) | Rezoluția verticală la care este redimensionată imaginea. | Fix: 640 |
-| **OUTPUT 1:** BBox Center (x,y) | Numeric | Coordonate Relative | Poziția centrului geometric al defectului detectat. | [0.0, 1.0] |
-| **OUTPUT 2:** BBox Size (w,h) | Numeric | Dimensiuni Relative | Lățimea și înălțimea dreptunghiului care încadrează defectul. | [0.0, 1.0] |
-| **OUTPUT 3:** Confidence Score | Numeric | Probabilitate | Gradul de certitudine al modelului pentru detecția curentă. | [0.0, 1.0] |
-| **OUTPUT 4:** Class ID | Categorial | ID Etichetă | Tipul defectului identificat (ex: Porozitate, Fisură). | {0, 1, 2, 3, 4} |
+| --- | --- | --- | --- | --- |
+| **Input Image** | Matrice 3D | Pixeli | Imaginea sudurii redimensionată la 224x224 | 0–255 (int) |
+| **Label (Clasa)** | Categorial | - | Tipul defectului: `bad_weld`, `crack`, `good_weld`, `porosity`, `spatter` | {0, 1, 2, 3, 4} |
 
 ---
 
 ## 3. Analiza Exploratorie a Datelor (EDA) – Sintetic
 
-### 3.1 Statistici descriptive aplicate
+### 3.1 Probleme identificate inițial
 
-* **Distribuția claselor:** Analiza numărului de instanțe pentru fiecare tip de defect (ex: "Bad Welding" vs "Good Welding") pentru a verifica balansul datelor.
-* **Distribuția dimensiunilor BBox:** Histograme ale dimensiunilor defectelor (mici vs. mari) pentru a ajusta ancorele modelului (dacă e cazul).
-* **Harta termică a pozițiilor:** Vizualizarea zonelor din imagine unde apar cel mai frecvent defectele.
+În faza de analiză a datelor brute descărcate de pe Roboflow, s-au identificat următoarele probleme critice:
 
-### 3.2 Analiza calității datelor
+1. **Structură Haotică:** Dataset-ul conținea peste **90 de foldere** redundante generate automat (ex: `bad_weld_multiple_spatter`, `good_weld_spatter`), în loc de cele 5 clase principale.
+2. **Dezechilibru de clasă:** Clasa `spatter` avea sute de imagini, în timp ce clasa `crack` avea foarte puține exemplare inițiale.
+3. **Variații de mediu:** Imaginile proveneau din surse diferite, având iluminare și rezoluții inconsistente.
 
-* **Verificarea integrității imaginilor:** Identificarea fișierelor corupte care nu pot fi deschise de OpenCV.
-* **Verificarea etichetelor:** Identificarea fișierelor imagine care nu au un fișier `.txt` asociat sau au coordonate invalide (în afara [0,1]).
+### 3.2 Statistici descriptive (Post-Procesare)
 
-### 3.3 Probleme identificate
-
-* [Identificat] Dezechilibru de clasă: Mai multe exemple de "Good Welding" decât "Crack".
-* [Identificat] Variații mari de iluminare în imaginile preluate din surse diferite.
+În urma curățării, distribuția a fost stabilizată, iar toate imaginile au fost aduse la standardul CNN.
 
 ---
 
 ## 4. Preprocesarea Datelor
 
-### 4.1 Curățarea datelor
+### 4.1 Curățarea datelor (Script `fix_dataset.py`)
 
-* **Eliminare duplicate:** Ștergerea imaginilor identice (hash-checking).
-* **Tratarea etichetelor lipsă:** Eliminarea imaginilor din setul de antrenament care nu conțin adnotări valide.
+Am implementat un script custom (`src/data_acquisition/fix_dataset.py`) care a rezolvat problema folderelor multiple:
 
-### 4.2 Transformarea caracteristicilor
+* **Algoritm:** A scanat recursiv directoarele `raw`, `train`, `test` de la Roboflow.
+* **Acțiune:** A identificat cuvinte cheie în numele folderelor și a mutat automat imaginile în cele 5 clase canonice: `bad_weld`, `crack`, `good_weld`, `porosity`, `spatter`.
+* **Rezultat:** 1372 imagini salvate corect, 94 foldere inutile șterse.
 
-* **Redimensionare:** Toate imaginile sunt redimensionate la 640x640 px (standard YOLOv8) cu padding (letterbox) pentru a păstra raportul de aspect.
-* **Normalizare:** Valorile pixelilor (0-255) sunt împărțite la 255 pentru a obține intervalul [0, 1].
-* **Augmentare:** Aplicarea de rotații, flip-uri și ajustări de luminozitate "on-the-fly" în timpul antrenării (Mosaic augmentation specific YOLO).
+### 4.2 Transformarea și Augmentarea (Script `generate_data.py`)
 
-### 4.3 Structurarea seturilor de date
+Pentru a îndeplini cerința de originalitate și a îmbunătăți robustețea modelului, am aplicat:
 
-**Împărțire realizată:**
-* 70% – train (pentru învățarea parametrilor)
-* 20% – validation (pentru tuning-ul hiperparametrilor în timpul epocilor)
-* 10% – test (pentru evaluarea finală nepolarizată)
+1. **Zgomot Gaussian:** Simulează senzori industriali de slabă calitate.
+2. **Variații de Luminozitate (HSV):** Simulează condiții de sudură în întuneric sau lumină puternică.
+3. **Redimensionare:** Toate imaginile au fost aduse la **224x224 px**.
 
-**Principii respectate:**
-* Imaginile au fost amestecate (shuffled) înainte de împărțire.
-* Nu există suprapuneri între seturile de Train și Test (Data Leakage prevention).
+**Rezultat Augmentare:** Dataset-ul a crescut de la 1372 la **4116 imagini** (66.67% contribuție proprie).
 
-### 4.4 Salvarea rezultatelor preprocesării
+### 4.3 Structurarea pentru Antrenare
 
-* Configurația dataset-ului este salvată în `data.yaml`.
-* Structura de foldere respectă standardul Ultralytics: `images/train`, `labels/train`, etc.
+Datele finale se află în `data/train/`. Împărțirea în seturi de antrenare și validare se face dinamic în cod (`train.py`) folosind Keras:
+
+* **80% Antrenare**
+* **20% Validare** (Stratificat)
+
+### 4.4 Transformări la încărcare (Normalization)
+
+În pipeline-ul de antrenare, se aplică un strat de normalizare:
+
+```python
+normalization_layer = tf.keras.layers.Rescaling(1./255)
+
+```
+
+Acesta transformă valorile pixelilor din `[0, 255]` în `[0, 1]` pentru convergență rapidă.
 
 ---
 
 ## 5. Fișiere Generate în Această Etapă
 
-* `data/raw/` – imaginile originale descărcate.
-* `data/processed/` – (virtual) imaginile sunt procesate în timp real de dataloader-ul YOLO, dar structura logică este definită în `data.yaml`.
-* `src/train_yolo.py` – scriptul de antrenare.
-* `data/README.md` – descrierea detaliată a sursei și structurii.
+* `data/raw/` – Cele 5 foldere curățate.
+* `data/train/` – Dataset-ul complet (4116 imagini).
+* `src/data_acquisition/fix_dataset.py` – Scriptul de curățare a structurii.
+* `src/data_acquisition/generate_data.py` – Scriptul de generare a datelor sintetice.
 
 ---
 
-## 6. Stare Etapă (de completat de student)
+## 6. Stare Etapă
 
-- [X] Structură repository configurată
-- [X] Dataset analizat (EDA realizată) - *În curs*
-- [X] Configurare `data.yaml` și structură foldere YOLO
-- [X] Antrenare model (Epochs 1-50)
-- [X] Documentație actualizată în README
+* [X] Structură repository configurată
+* [X] Dataset analizat și curățat de erori structurale
+* [X] Date preprocesate (Resize 224x224)
+* [X] Augmentare realizată (66% date originale generate)
+* [X] Documentație actualizată
 
 ---
-```
