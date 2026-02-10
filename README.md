@@ -4,7 +4,7 @@
 
 **Instituție:** POLITEHNICA București – FIIR
 
-**Student:** [Nume Prenume]
+**Student:** Samata George
 
 **Data:** 22.01.2026
 
