@@ -5,7 +5,7 @@
 **Instituție:** POLITEHNICA București – FIIR
 
 **Student:** Șamata George Cristian
-**Link Repository GitHub:** [Adaugă Linkul Aici]
+**Link Repository GitHub:** https://github.com/GeorgeSamata/Sistem-AI-pentru-Clasificarea-Defectelor-de-Sudura
 **Data predării:** 22.01.2026
 
 ---
