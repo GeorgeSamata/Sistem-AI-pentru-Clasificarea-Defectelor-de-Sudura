@@ -3,7 +3,7 @@
 | Câmp | Valoare |
 |------|---------|
 | **Student** | Samata George |
-| **Grupa / Specializare** | [Completeaza Grupa Aici] / Informatică Industrială |
+| **Grupa / Specializare** | 632AB / Stiinte ingineresti aplicate/ Informatică Industrială |
 | **Disciplina** | Rețele Neuronale |
 | **Instituție** | POLITEHNICA București – FIIR |
 | **Link Repository GitHub** | https://github.com/GeorgeSamata/Sistem-AI-pentru-Clasificarea-Defectelor-de-Sudura |
